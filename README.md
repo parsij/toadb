@@ -1,2 +1,2 @@
 # toadb
-Time over android debuging bridge
+Time over android debuging bridge or toadb
