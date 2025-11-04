@@ -12,7 +12,7 @@ function Require-Admin {
 Require-Admin
 
 function Have($n){ $null -ne (Get-Command $n -ErrorAction SilentlyContinue) }
-$RAW_BASE = "https://raw.githubusercontent.com/YOUR_USER/YOUR_REPO/main"
+$RAW_BASE = "https://github.com/parsij/toadb/blob/main/main.py"
 $Base = "C:\ProgramData\PhoneTimeSync"
 $DstPy = Join-Path $Base "main.py"
 $Task = "PhoneTimeSyncDaemon"
