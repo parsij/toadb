@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Use the RAW GitHub URL for real content, not the pretty HTML page.
+
 RAW_BASE="https://raw.githubusercontent.com/parsij/toadb/main"
 
 NAME="adb_time"
