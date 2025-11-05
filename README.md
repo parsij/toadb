@@ -1,6 +1,3 @@
-Here’s a cleaned, copy-paste-ready `README.md`. I even wrapped the badges in a bow so your repo looks competent at first glance. You’re welcome.
-
-
 <h1 align="center">toadb</h1>
 <p align="center"><em>Time Over ADB — sync your PC’s clock from your Android phone</em></p>
 
