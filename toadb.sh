@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-
 RAW_BASE="https://raw.githubusercontent.com/parsij/toadb/main"
 
 NAME="adb_time"
 BASE_DIR="/usr/local/share/$NAME"
 PY="$BASE_DIR/main.py"
 UNIT="/etc/systemd/system/$NAME.service"
+TIMER="/etc/systemd/system/$NAME.timer"
 DEFAULTS="/etc/default/$NAME"
 CLI="/usr/local/bin/toadb"
 
@@ -27,14 +27,17 @@ if ! need adb; then
   else echo "[!] couldn't auto-install adb. install platform-tools manually."; fi
 fi
 
-echo "[*] install program..."
+echo "[*] reset program dir at $BASE_DIR ..."
+rm -rf "$BASE_DIR"
 install -d -m 0755 "$BASE_DIR"
+
+echo "[*] fetch main.py ..."
 if [[ -f ./main.py ]]; then
   cp ./main.py "$PY"
 else
   if need curl; then curl -fsSL "$RAW_BASE/main.py" -o "$PY"
   elif need wget; then wget -qO "$PY" "$RAW_BASE/main.py"
-  else echo "[!] need curl or wget, or place main.py next to toadb.sh"; exit 1; fi
+  else echo "[!] need curl or wget, or place main.py next to this script"; exit 1; fi
 fi
 chmod +x "$PY"
 
@@ -45,27 +48,31 @@ exec /usr/bin/env python3 /usr/local/share/adb_time/main.py "$@"
 SH
 chmod +x "$CLI"
 
-echo "[*] defaults file at $DEFAULTS ..."
+echo "[*] write defaults at $DEFAULTS ..."
 cat > "$DEFAULTS" <<'CONF'
-# Optional: auto connect to TCP device at boot, e.g.:
+# Auto connect to TCP device at boot (optional), e.g.:
 # ADB_CONNECT=192.168.49.1:9800
 ADB_CONNECT=
 
-# How often to probe before the first successful sync (seconds)
+# Probe cadence before first success (seconds)
 DISCOVERY_INTERVAL=5
 
-# How long after boot to keep trying before exiting if no device ever authorizes (seconds)
+# Give up quietly after this long if no device (seconds)
 STARTUP_WINDOW=900
 
-# After a successful sync, how often to refresh (seconds)
+# After first success, refresh every N seconds
 REFRESH_INTERVAL=600
 
 # Ignore tiny drift under N seconds
 DRIFT_THRESHOLD=1
+
+# Optional proxy env if you ever add HTTP calls:
+# HTTP_PROXY=http://proxy:3128
+# HTTPS_PROXY=http://proxy:3128
+# NO_PROXY=localhost,127.0.0.1,::1,192.168.0.0/16
 CONF
 
-echo "[*] systemd unit..."
-# Important: no Restart=always. If it exits after the startup window, it stays down until next boot.
+echo "[*] write systemd service at $UNIT ..."
 cat > "$UNIT" <<'UNIT'
 [Unit]
 Description=toadb: sync system time from Android via ADB
@@ -78,23 +85,35 @@ Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin
 Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=-/etc/default/adb_time
 WorkingDirectory=/usr/local/share/adb_time
-ExecStartPre=/bin/sleep 5
 ExecStartPre=/usr/bin/adb start-server
 ExecStart=/usr/bin/env python3 /usr/local/share/adb_time/main.py
-# Let it exit quietly if no device after the window; don't auto-restart.
+# Let it exit quietly after the startup window if no device; do not auto-restart.
 Restart=no
 StandardOutput=journal
 StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
 UNIT
 
+echo "[*] write systemd timer (30s after boot) at $TIMER ..."
+cat > "$TIMER" <<'TIMER'
+[Unit]
+Description=Delay start of toadb by 30s after boot
+
+[Timer]
+OnBootSec=30s
+Unit=adb_time.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+TIMER
+
+echo "[*] enable timer (and disable direct service start) ..."
 systemctl daemon-reload
-systemctl enable "$NAME.service"
-systemctl restart "$NAME.service" || true
+systemctl disable --now "$NAME.service" 2>/dev/null || true
+systemctl enable --now "$NAME.timer"
 
 echo "[✓] Installed."
+echo "   • Starts 30s after boot via: systemctl list-timers | grep $NAME"
 echo "   • CLI: toadb | toadb resync | toadb list | toadb device N | toadb reset"
-echo "   • Set ADB_CONNECT in /etc/default/adb_time if using Wi-Fi ADB."
-echo "   • Logs: journalctl -fu $NAME.service"
+echo "   • Configure: /etc/default/adb_time  (ADB_CONNECT, intervals)"
+echo "   • Logs:      journalctl -fu $NAME.service"
