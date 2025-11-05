@@ -10,7 +10,7 @@
 ---
 
 **What’s “toadb”?**  
-toadb = **Time Over ADB(Android Debugging Bridge) **.
+toadb = Time Over ADB(Android Debugging Bridge).
 
 > Windows port is **experimental**. Linux is the primary, well-tested target.
 
