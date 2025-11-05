@@ -17,7 +17,20 @@ need(){ command -v "$1" >/dev/null 2>&1; }
 echo "[*] need root..."
 if [[ ${EUID:-0} -ne 0 ]]; then
   echo "[*] re-running with sudo..."
-  exec sudo -E bash "$0" "$@"
+  # If we have a readable on-disk script, exec that. If we were piped, refetch under sudo.
+  if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" && -r "${BASH_SOURCE[0]}" ]]; then
+    exec sudo -E /usr/bin/env bash "${BASH_SOURCE[0]}" "$@"
+  else
+    if need curl; then
+      exec sudo -E /usr/bin/env bash -c "curl -fsSL '$RAW_BASE/toadb.sh' | /usr/bin/env bash -s --"
+    elif need wget; then
+      exec sudo -E /usr/bin/env bash -c "wget -qO- '$RAW_BASE/toadb.sh' | /usr/bin/env bash -s --"
+    else
+      echo "[!] cannot elevate from a pipe without curl or wget."
+      echo "    Try: bash -c 'wget -qO- $RAW_BASE/toadb.sh | sudo -E bash -s --'"
+      exit 1
+    fi
+  fi
 fi
 
 echo "[*] install adb if needed..."
@@ -52,7 +65,6 @@ chmod +x "$CLI"
 echo "[*] write defaults at $DEFAULTS ..."
 cat > "$DEFAULTS" <<'CONF'
 # Auto connect to TCP device at boot (optional), e.g.:
-# ADB_CONNECT=192.168.49.1:9800
 ADB_CONNECT=
 
 # Probe cadence before first success (seconds)
@@ -67,10 +79,6 @@ REFRESH_INTERVAL=600
 # Ignore tiny drift under N seconds
 DRIFT_THRESHOLD=1
 
-# Optional proxy env if you ever add HTTP calls:
-# HTTP_PROXY=http://proxy:3128
-# HTTPS_PROXY=http://proxy:3128
-# NO_PROXY=localhost,127.0.0.1,::1,192.168.0.0/16
 CONF
 
 echo "[*] write systemd service at $UNIT ..."
