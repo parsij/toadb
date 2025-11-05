@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# toadb.sh — Linux installer with 30s-after-boot start via systemd timer
+
 RAW_BASE="https://raw.githubusercontent.com/parsij/toadb/main"
 
-NAME="adb_time"
-BASE_DIR="/usr/local/share/$NAME"
+BASE_DIR="/usr/local/share/adb_time"
 PY="$BASE_DIR/main.py"
-UNIT="/etc/systemd/system/$NAME.service"
-TIMER="/etc/systemd/system/$NAME.timer"
-DEFAULTS="/etc/default/$NAME"
+UNIT="/etc/systemd/system/adb_time.service"
+TIMER="/etc/systemd/system/adb_time.timer"
+DEFAULTS="/etc/default/adb_time"
 CLI="/usr/local/bin/toadb"
 
 need(){ command -v "$1" >/dev/null 2>&1; }
@@ -109,11 +110,11 @@ TIMER
 
 echo "[*] enable timer (and disable direct service start) ..."
 systemctl daemon-reload
-systemctl disable --now "$NAME.service" 2>/dev/null || true
-systemctl enable --now "$NAME.timer"
+systemctl disable --now "adb_time.service" 2>/dev/null || true
+systemctl enable --now "adb_time.timer"
 
 echo "[✓] Installed."
-echo "   • Starts 30s after boot via: systemctl list-timers | grep $NAME"
+echo "   • Starts 30s after boot via: systemctl list-timers | grep adb_time"
 echo "   • CLI: toadb | toadb resync | toadb list | toadb device N | toadb reset"
 echo "   • Configure: /etc/default/adb_time  (ADB_CONNECT, intervals)"
-echo "   • Logs:      journalctl -fu $NAME.service"
+echo "   • Logs:      journalctl -fu adb_time.service"
