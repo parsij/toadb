@@ -170,8 +170,3 @@ Happy to help on your projects. Hiring or collab: **[parsapoosti@gmail.com](mail
 ## 📝 License (MIT)
 
 This project is MIT-licensed. The license text is in `LICENSE`. Attribution to **Parsa Poosti (Parsij)** must remain in derivative works and distributions.
-
-```
-
-[Download the README.md](sandbox:/mnt/data/README.md)
-```
