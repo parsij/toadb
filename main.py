@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-# toadb main.py — ADB time sync with boot startup window + periodic refresh
+# toadb main.py — ADB time + timezone sync with boot startup window + periodic refresh
 # - On boot: scan every DISCOVERY_INTERVAL (default 5s) for up to STARTUP_WINDOW (default 900s).
 #   If no device authorizes, exit quietly until next boot.
 # - If a sync succeeds during the window, stay running and resync every REFRESH_INTERVAL (default 600s).
-# - CLI: `toadb`, `toadb resync`, `toadb list`, `toadb device N`, `toadb reset`, `toadb --oneshot`
+# - Sets BOTH system time and system timezone from the phone.
+# - CLI: `toadb`, `toadb resync`, `toadb list`, `toadb device N`, `toadb reset`, `toadb oneshot`
 # - Extras: LOG_FILE env for file logging, graceful SIGTERM/SIGINT, adb existence check, device model in logs.
 
 import os, sys, time, json, shutil, platform, subprocess, signal
@@ -125,9 +126,7 @@ def pick_serial(preferred: Optional[str]) -> Optional[str]:
 
 def wait_for_authorized(serial: str):
     run(["adb", "start-server"])
-    # Wait for device to appear at all
     subprocess.run(["adb", "-s", serial, "wait-for-device"], capture_output=True, text=True)
-    # Then wait until authorized and responsive
     while True:
         state = dict(adb_devices()).get(serial, "")
         if state == "device":
@@ -151,9 +150,24 @@ def phone_epoch(serial: str) -> Optional[int]:
             return int(s)
     return None
 
-def maybe_connect_tcp(target: str):
-    if target:
-        subprocess.run(["adb", "connect", target], capture_output=True, text=True)
+def phone_offset_hhmm(serial: str) -> Optional[str]:
+    p = subprocess.run(["adb", "-s", serial, "shell", "date", "+%z"], capture_output=True, text=True)
+    s = (p.stdout or "").strip().replace("\r", "")
+    if p.returncode == 0 and len(s) >= 5 and s[0] in "+-":
+        return s[:5]
+    return None
+
+def phone_tz_id(serial: str) -> Optional[str]:
+    # Prefer IANA zone ID
+    for cmd in (
+        ["adb", "-s", serial, "shell", "getprop", "persist.sys.timezone"],
+        ["adb", "-s", serial, "shell", "settings", "get", "global", "time_zone"],
+    ):
+        p = run(cmd)
+        s = (p.stdout or "").strip().replace("\r", "")
+        if p.returncode == 0 and s and s.lower() != "null":
+            return s
+    return None
 
 def device_model(serial: str) -> str:
     try:
@@ -190,6 +204,121 @@ def elevate_windows():
     ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, args, None, 1)
     sys.exit(0)
 
+# ---------- timezone helpers ----------
+IANA_TO_WINDOWS = {
+    # Common mappings
+    "UTC": "UTC",
+    "Etc/UTC": "UTC",
+    "America/Los_Angeles": "Pacific Standard Time",
+    "America/Denver": "Mountain Standard Time",
+    "America/Chicago": "Central Standard Time",
+    "America/New_York": "Eastern Standard Time",
+    "America/Phoenix": "US Mountain Standard Time",
+    "America/Anchorage": "Alaskan Standard Time",
+    "Pacific/Honolulu": "Hawaiian Standard Time",
+    "Europe/London": "GMT Standard Time",
+    "Europe/Berlin": "W. Europe Standard Time",
+    "Europe/Paris": "Romance Standard Time",
+    "Europe/Madrid": "Romance Standard Time",
+    "Europe/Rome": "W. Europe Standard Time",
+    "Europe/Warsaw": "Central European Standard Time",
+    "Europe/Moscow": "Russian Standard Time",
+    "Asia/Tehran": "Iran Standard Time",
+    "Asia/Jerusalem": "Israel Standard Time",
+    "Asia/Tokyo": "Tokyo Standard Time",
+    "Asia/Seoul": "Korea Standard Time",
+    "Asia/Shanghai": "China Standard Time",
+    "Asia/Hong_Kong": "China Standard Time",
+    "Asia/Kolkata": "India Standard Time",
+    "Asia/Kathmandu": "Nepal Standard Time",
+    "Australia/Sydney": "AUS Eastern Standard Time",
+    "Australia/Perth": "W. Australia Standard Time",
+    "America/Sao_Paulo": "E. South America Standard Time",
+    "America/Bogota": "SA Pacific Standard Time",
+    "Africa/Cairo": "Egypt Standard Time",
+    "Africa/Johannesburg": "South Africa Standard Time",
+}
+
+def etc_gmt_from_offset(hhmm: str) -> Optional[str]:
+    # Map full-hour offsets to Etc/GMT zones. Note: signs are inverted in Etc/GMT names.
+    # +0800 (UTC+8) -> Etc/GMT-8, -0300 (UTC-3) -> Etc/GMT+3
+    try:
+        sign = 1 if hhmm[0] == "+" else -1
+        h = int(hhmm[1:3])
+        m = int(hhmm[3:5])
+        if m != 0:
+            return None
+        name = f"Etc/GMT{(-sign*h):+d}".replace("+", "+").replace("+-", "-")
+        return name
+    except Exception:
+        return None
+
+def set_timezone_linux(tz_id: Optional[str], off: Optional[str]) -> bool:
+    # Try IANA ID first
+    if tz_id:
+        if have("timedatectl"):
+            p = subprocess.run(["timedatectl", "set-timezone", tz_id], capture_output=True, text=True)
+            if p.returncode == 0:
+                log(f"Linux timezone set to {tz_id}")
+                return True
+        # fallback to direct link if timedatectl missing
+        zonefile = f"/usr/share/zoneinfo/{tz_id}"
+        if os.path.exists(zonefile):
+            try:
+                subprocess.run(["ln", "-sf", zonefile, "/etc/localtime"], check=False)
+                with open("/etc/timezone", "w", encoding="utf-8") as f:
+                    f.write(tz_id + "\n")
+                log(f"Linux timezone set (symlink) to {tz_id}")
+                return True
+            except Exception as e:
+                log(f"Failed to write timezone link: {e}")
+
+    # Fallback: attempt Etc/GMT from offset if on full hour
+    if off:
+        etc = etc_gmt_from_offset(off)
+        if etc and have("timedatectl"):
+            p = subprocess.run(["timedatectl", "set-timezone", etc], capture_output=True, text=True)
+            if p.returncode == 0:
+                log(f"Linux timezone set to {etc} (from offset {off})")
+                return True
+    log("Linux timezone unchanged (no valid tz id or offset mapping).")
+    return False
+
+def set_timezone_windows(tz_id: Optional[str], off: Optional[str]) -> bool:
+    target = None
+    if tz_id and tz_id in IANA_TO_WINDOWS:
+        target = IANA_TO_WINDOWS[tz_id]
+    # Minimal offset fallbacks if no mapping
+    if not target and off:
+        off_map = {
+            "-0800": "Pacific Standard Time",
+            "-0700": "Mountain Standard Time",
+            "-0600": "Central Standard Time",
+            "-0500": "Eastern Standard Time",
+            "+0000": "UTC",
+            "+0100": "W. Europe Standard Time",
+            "+0200": "South Africa Standard Time",
+            "+0300": "Russian Standard Time",
+            "+0330": "Iran Standard Time",
+            "+0530": "India Standard Time",
+            "+0900": "Tokyo Standard Time",
+        }
+        target = off_map.get(off)
+    if not target:
+        log("Windows timezone unchanged (no mapping for phone tz/offset).")
+        return False
+
+    ps = [
+        "powershell", "-NoProfile", "-Command",
+        f"try {{ Set-TimeZone -Id '{target}' -ErrorAction Stop; 'OK' }} catch {{ 'ERR:'+$_ }}"
+    ]
+    p = subprocess.run(ps, capture_output=True, text=True)
+    if p.returncode == 0 and "OK" in (p.stdout or ""):
+        log(f"Windows timezone set to {target}")
+        return True
+    log(f"Failed to set Windows timezone to {target}: {(p.stdout or p.stderr).strip()}")
+    return False
+
 # ---------- set time ----------
 def set_time_linux_epoch(epoch: int) -> bool:
     if have("timedatectl"):
@@ -219,25 +348,49 @@ def set_time_windows_epoch(epoch: int) -> bool:
 
 # ---------- actions ----------
 def sync_once(serial: str, drift_threshold: int = 1) -> bool:
+    # Read phone time + tz info
     pe = phone_epoch(serial)
     if pe is None:
         log("Failed to read epoch from phone.")
         return False
+    off = phone_offset_hhmm(serial)
+    tz = phone_tz_id(serial)
+
     host = int(time.time())
     drift = pe - host
     log(f"Phone epoch: {pe} | Host epoch: {host} | Drift: {drift}s")
-    if abs(drift) < drift_threshold:
-        log("Drift below threshold; no change.")
-        return True
+    if tz:
+        log(f"Phone timezone: {tz}")
+    if off:
+        log(f"Phone offset: {off}")
+
+    # Elevate, set timezone first (always), then set time if needed
+    ok_tz = True
+    ok_time = True
     if os_is_windows():
         elevate_windows()
-        ok = set_time_windows_epoch(pe)
+        ok_tz = set_timezone_windows(tz, off)
+        if abs(drift) >= drift_threshold:
+            ok_time = set_time_windows_epoch(pe)
+        else:
+            log("Drift below threshold; skipped time set.")
     else:
         elevate_linux()
-        ok = set_time_linux_epoch(pe)
-    if ok:
-        log("✅ System time updated.")
-    return ok
+        ok_tz = set_timezone_linux(tz, off)
+        if abs(drift) >= drift_threshold:
+            ok_time = set_time_linux_epoch(pe)
+        else:
+            log("Drift below threshold; skipped time set.")
+
+    if ok_tz and ok_time:
+        log("✅ System time/timezone updated.")
+    elif ok_tz and not ok_time:
+        log("⚠️ Timezone updated, time unchanged due to error or threshold.")
+    elif not ok_tz and ok_time:
+        log("⚠️ Time updated, timezone unchanged (no mapping or failure).")
+    else:
+        log("❌ Failed to update time and timezone.")
+    return ok_tz and ok_time
 
 def cmd_list() -> int:
     devs = adb_devices()
@@ -307,7 +460,6 @@ def run_boot_cycle(oneshot=False):
     log(f"toadb daemon: discovery every {discovery_interval}s for {startup_window}s, "
         f"then refresh every {refresh_interval}s on success.")
 
-    # quick sanity: adb present
     if not have("adb"):
         log("adb not in PATH. Exiting.")
         sys.exit(127)
@@ -320,7 +472,7 @@ def run_boot_cycle(oneshot=False):
     while True:
         try:
             if connect_target:
-                maybe_connect_tcp(connect_target)
+                subprocess.run(["adb", "connect", connect_target], capture_output=True, text=True)
 
             devs = adb_devices()
             if not devs:
