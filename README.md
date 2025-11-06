@@ -104,11 +104,6 @@ REFRESH_INTERVAL=600
 
 # Ignore drift under N seconds
 DRIFT_THRESHOLD=1
-
-# Optional proxy env if you later add HTTP calls
-# HTTP_PROXY=http://proxy:3128
-# HTTPS_PROXY=http://proxy:3128
-# NO_PROXY=localhost,127.0.0.1,::1,192.168.0.0/16
 ```
 
 Apply changes:
@@ -117,16 +112,6 @@ Apply changes:
 sudo systemctl daemon-reload
 sudo systemctl restart adb_time.timer
 ```
-
-### Windows
-
-* Optional Wi-Fi ADB or tuning: edit `C:\Program Files\adb_time_sync\run_daemon.cmd` and uncomment the env vars at the top.
-* Make sure your timezone is correct:
-
-  ```powershell
-  tzutil /g
-  # tzutil /s "Pacific Standard Time"
-  ```
 
 ## ✅ Requirements
 
