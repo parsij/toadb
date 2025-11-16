@@ -1,4 +1,4 @@
-<h1 align="center">toadb</h1>
+<h1 align="center">Toad-B</h1>
 <p align="center"><em>Time Over ADB — sync your PC’s clock from your Android phone</em></p>
 
 <p align="center">
