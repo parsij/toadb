@@ -1,5 +1,5 @@
 <h1 align="center">Toad-B</h1>
-<p align="center"><em>Time Over ADB — sync your PC’s clock from your Android phone</em></p>
+<p align="center"><em>Time Over ADB — sync your PC’s clock from your Android device</em></p>
 
 <p align="center">
   <a href="https://github.com/parsij/toadb"><img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-blue" alt="Platform"></a>
