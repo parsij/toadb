@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-# toadb main.py — ADB time + timezone sync with boot startup window + periodic refresh
-# - On boot: scan every DISCOVERY_INTERVAL (default 5s) for up to STARTUP_WINDOW (default 900s).
-#   If no device authorizes, exit quietly until next boot.
-# - If a sync succeeds during the window, stay running and resync every REFRESH_INTERVAL (default 600s).
-# - Sets BOTH system time and system timezone from the phone.
-# - CLI: `toadb`, `toadb resync`, `toadb list`, `toadb device N`, `toadb reset`, `toadb oneshot`
-# - Extras: LOG_FILE env for file logging, graceful SIGTERM/SIGINT, adb existence check, device model in logs.
-
 import os, sys, time, json, shutil, platform, subprocess, signal
 from typing import List, Tuple, Optional
 
