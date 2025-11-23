@@ -7,11 +7,6 @@
   <a href="https://github.com/parsij/toadb/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"></a>
 </p>
 
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=iSBMmWQCinE" target="_blank">
-    <img src="https://img.youtube.com/vi/iSBMmWQCinE/maxresdefault.jpg" alt="Toad-B video thumbnail" width="480">
-  </a>
-</p>
 
 ---
 
