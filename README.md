@@ -7,6 +7,12 @@
   <a href="https://github.com/parsij/toadb/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"></a>
 </p>
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=iSBMmWQCinE" target="_blank">
+    <img src="https://img.youtube.com/vi/iSBMmWQCinE/maxresdefault.jpg" alt="Toad-B video thumbnail" width="480">
+  </a>
+</p>
+
 ---
 
 **What’s “toadb”?**  
@@ -18,13 +24,24 @@ toadb = Time Over ADB(Android Debugging Bridge).
 
 ## 🚀 One-liner install
 
+
+### Linux (wget)
+
+This installs ADB if needed, drops `main.py` into `/usr/local/share/adb_time/`, installs a `toadb` CLI shim, and sets up a **systemd timer** to start **30s after boot**.
+
+```bash
+bash -c 'wget -qO- https://raw.githubusercontent.com/parsij/toadb/main/toadb.sh | bash'
+````
+
+Logs: `journalctl -fu adb_time.service`
+
 ### Windows (PowerShell — run as Administrator)
 
 This downloads and runs the bootstrap installer. It self-elevates, lays files in `C:\Program Files\adb_time_sync\`, creates a startup task that runs **30s after boot** as **SYSTEM**, adds a `toadb` command, and tries to install ADB/Python via winget if missing.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -c "iwr -useb https://raw.githubusercontent.com/parsij/toadb/main/toadb_bootstrap.ps1 | iex"
-````
+```
 
 First run under SYSTEM triggers the Android USB debugging prompt. Tick **“Always allow from this computer.”**
 Logs: `C:\Program Files\adb_time_sync\toadb.log`
@@ -35,21 +52,25 @@ Logs: `C:\Program Files\adb_time_sync\toadb.log`
 wget -O %TEMP%\toadb_bootstrap.ps1 https://raw.githubusercontent.com/parsij/toadb/main/toadb_bootstrap.ps1 && powershell -NoProfile -ExecutionPolicy Bypass -File %TEMP%\toadb_bootstrap.ps1
 ```
 
-### Linux (wget)
-
-This installs ADB if needed, drops `main.py` into `/usr/local/share/adb_time/`, installs a `toadb` CLI shim, and sets up a **systemd timer** to start **30s after boot**.
-
-```bash
-bash -c 'wget -qO- https://raw.githubusercontent.com/parsij/toadb/main/toadb.sh | bash'
-```
-
-Logs: `journalctl -fu adb_time.service`
-
 **Behind a proxy?**
 
 ```bash
 bash -c 'HTTPS_PROXY=http://PROXY_IP_ADDRES:PORT_NUMBER HTTP_PROXY=http://PROXY_IP_ADDRES:PORT_NUMBER wget -qO- https://raw.githubusercontent.com/parsij/toadb/main/toadb.sh | bash'
 ```
+
+## Need more help or don't know how what to do ?
+
+**Watch this YouTube video dedicated to Toad-B**
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=iSBMmWQCinE" target="_blank">
+    <img src="https://img.youtube.com/vi/iSBMmWQCinE/maxresdefault.jpg" alt="Toad-B setup & usage video" width="480">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=iSBMmWQCinE"><strong>▶ Watch the Toad-B setup video on YouTube</strong></a>
+</p>
 
 ## ✨ What it does
 
@@ -168,8 +189,3 @@ Happy to help on your projects. Hiring or collab: **[parsapoosti@gmail.com](mail
 ## 📝 License (MIT)
 
 This project is MIT-licensed. The license text is in `LICENSE`. Attribution to **Parsa Poosti (Parsij)** must remain in derivative works and distributions.
-
-```
-
-[Download the README.md](sandbox:/mnt/data/README.md)
-```
